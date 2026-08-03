@@ -1,0 +1,39 @@
+flyin/
+  __init__.py
+  main.py              # CLI entry point
+  cli.py               # argument parsing, app bootstrap
+  exceptions.py        # custom parse/runtime errors
+  models/
+    __init__.py
+    enums.py           # zone types, statuses
+    graph.py           # Zone, Connection, MapData dataclasses
+    drone.py           # drone state and movement state
+  parser/
+    __init__.py
+    lexer.py           # optional token helpers
+    map_parser.py      # main parsing logic
+    metadata.py        # metadata parsing/validation
+    validators.py      # duplicate checks, format checks
+  simulation/
+    __init__.py
+    scheduler.py       # turn-by-turn movement planning
+    pathfinding.py     # path scoring / candidate routes
+    engine.py          # simulation loop
+  output/
+    __init__.py
+    colors.py          # ANSI helpers
+    printer.py         # turn output rendering
+  utils/
+    __init__.py
+    file_io.py         # safe file loading
+    text.py            # small helpers
+tests/
+  test_parser.py
+  test_simulation.py
+  test_maps.py
+maps/
+  ...
+Makefile
+pyproject.toml
+.gitignore
+README.md

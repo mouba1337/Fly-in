@@ -1,0 +1,15 @@
+[project]
+name = "flyin-hon"
+version = "0.1.0"
+description = "Fly-In drone simulation challenge"
+requires-python = ">=3.10"
+dependencies = [
+    "rich>=13.0.0",
+]
+
+[tool.mypy]
+ignore_missing_imports = true
+disallow_untyped_defs = true
+check_untyped_defs = true
+warn_return_any = true
+warn_unused_ignores = true

@@ -26,3 +26,6 @@ class FlyInApp:
         except FlyInError as exc:
             self._printer.print_error(str(exc))
             return 1
+        except Exception as exc:
+            self._printer.print_error(f"Unexpected error: {exc}")
+            return 1

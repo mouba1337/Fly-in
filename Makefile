@@ -1,14 +1,16 @@
+MAP ?= maps/easy/01_linear_path.txt
+
 install:
 	uv sync
 
 run:
-	uv run python main.py --map maps/easy/01_linear_path.txt
+	uv run python main.py --map $(MAP)
 
 debug:
-	uv run python -m pdb main.py --map maps/easy/01_linear_path.txt
+	uv run python -m pdb -- main.py --map $(MAP)
 
 clean:
-	rm -rf __pycache__ .mypy_cache .pytest_cache .ruff_cache .venv
+	rm -rf __pycache__ .mypy_cache .pytest_cache .ruff_cache .venv dist build *.egg-info
 
 lint:
 	flake8 .

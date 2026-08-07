@@ -13,17 +13,7 @@ class MapParser:
     _VALID_DIRECTIVES: set[str] = {"nb_drones", "start_hub", "hub", "end_hub", "connection"}
 
     def parse(self, path: str | Path) -> MapData:
-        """Parse a map file.
-
-        Args:
-            path: Path to the map file.
-
-        Returns:
-            Parsed map data.
-
-        Raises:
-            MapParseError: If the file cannot be read or is invalid.
-        """
+        """Parse a map file into a MapData object."""
         file_path = Path(path)
 
         try:
@@ -53,12 +43,16 @@ class MapParser:
                 continue
 
             if directive == "start_hub":
+                if start_zone is not None:
+                    raise MapParseError(f"Line {line_no}: duplicate start_hub declaration")
                 zone = self._parse_zone(line, line_no, is_start=True)
                 self._add_zone(zone, zones, line_no)
                 start_zone = zone.name
                 continue
 
             if directive == "end_hub":
+                if end_zone is not None:
+                    raise MapParseError(f"Line {line_no}: duplicate end_hub declaration")
                 zone = self._parse_zone(line, line_no, is_end=True)
                 self._add_zone(zone, zones, line_no)
                 end_zone = zone.name
@@ -75,7 +69,9 @@ class MapParser:
 
                 key = tuple(sorted((connection.left, connection.right)))
                 if key in seen_connections:
-                    raise MapParseError(f"Line {line_no}: duplicate connection '{connection.left}-{connection.right}'")
+                    raise MapParseError(
+                        f"Line {line_no}: duplicate connection '{connection.left}-{connection.right}'"
+                    )
                 seen_connections.add(key)
                 connections.append(connection)
                 continue
@@ -121,7 +117,7 @@ class MapParser:
         is_start: bool = False,
         is_end: bool = False,
     ) -> Zone:
-        """Parse a zone definition."""
+        """Parse a zone definition line."""
         head, meta = self._split_metadata(line, line_no)
         parts = head.split()
 
@@ -145,12 +141,12 @@ class MapParser:
 
         color = metadata.get("color")
 
-        max_drones: int | None = None
+        max_drones = 1
         if "max_drones" in metadata:
             max_drones = self._parse_positive_int(metadata["max_drones"], line_no, "max_drones")
 
         if is_start or is_end:
-            max_drones = None
+            max_drones = 1
 
         return Zone(
             name=name,
@@ -182,6 +178,7 @@ class MapParser:
             raise MapParseError(f"Line {line_no}: a zone cannot connect to itself")
 
         metadata = self._parse_metadata(meta, line_no)
+
         max_link_capacity = 1
         if "max_link_capacity" in metadata:
             max_link_capacity = self._parse_positive_int(
@@ -193,7 +190,7 @@ class MapParser:
         return Connection(left=left, right=right, max_link_capacity=max_link_capacity)
 
     def _split_metadata(self, line: str, line_no: int) -> tuple[str, str]:
-        """Split a line into head and metadata."""
+        """Split a line into its main part and its metadata block."""
         if "[" not in line:
             return line, ""
         if not line.endswith("]"):
@@ -243,7 +240,7 @@ class MapParser:
             raise MapParseError(f"Line {line_no}: zone names cannot contain spaces or '-'")
 
     def _add_zone(self, zone: Zone, zones: dict[str, Zone], line_no: int) -> None:
-        """Add a zone after checking duplicates."""
+        """Add a zone after checking for duplicates."""
         if zone.name in zones:
             raise MapParseError(f"Line {line_no}: duplicate zone '{zone.name}'")
         for existing in zones.values():
@@ -252,7 +249,7 @@ class MapParser:
         zones[zone.name] = zone
 
     def _ensure_known_zones(self, connection: Connection, zones: dict[str, Zone], line_no: int) -> None:
-        """Ensure both ends of a connection already exist as zones."""
+        """Ensure both endpoints exist before adding a connection."""
         if connection.left not in zones:
             raise MapParseError(f"Line {line_no}: unknown zone '{connection.left}'")
         if connection.right not in zones:

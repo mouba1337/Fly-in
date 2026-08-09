@@ -1,4 +1,4 @@
-MAP ?= maps/easy/01_linear_path.txt
+MAP ?= maps/challenger/01_the_impossible_dream.txt
 
 install:
 	uv sync

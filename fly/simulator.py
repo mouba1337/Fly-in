@@ -1,274 +1,225 @@
 from __future__ import annotations
 
-import heapq
+from collections import deque
 from collections.abc import Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
-from fly.models import DroneState, MapData, Move, Zone
+from fly.models import MapData, Move
 
 
 @dataclass(slots=True)
-class PathCandidate:
-    """A candidate path with a cost score."""
+class Timeline:
+    """Tracks future occupancy for a zone or edge using a flat list."""
+    capacity: int
+    occupancy: list[int] = field(default_factory=list)
 
-    path: list[str]
-    score: int
+    def can_enter(self, turn: int) -> bool:
+        # -1 represents infinite capacity (start and end hubs)
+        if self.capacity == -1:
+            return True
+        self._ensure_size(turn)
+        return self.occupancy[turn] < self.capacity
+
+    def reserve(self, turn: int) -> None:
+        if self.capacity == -1:
+            return
+        self._ensure_size(turn)
+        self.occupancy[turn] += 1
+
+    def _ensure_size(self, turn: int) -> None:
+        if turn >= len(self.occupancy):
+            self.occupancy.extend([0] * (turn - len(self.occupancy) + 1))
+
+
+class SpaceTimeGraph:
+    """Manages the network and time-based reservations."""
+    
+    def __init__(self, data: MapData):
+        self.data = data
+        self.zone_timelines: dict[str, Timeline] = {}
+        self.edge_timelines: dict[tuple[str, str], Timeline] = {}
+        self.adj: dict[str, list[str]] = {name: [] for name in data.zones}
+        
+        self._initialize_timelines()
+
+    def _initialize_timelines(self) -> None:
+        for name, zone in self.data.zones.items():
+            if name in (self.data.start_zone, self.data.end_zone):
+                self.zone_timelines[name] = Timeline(capacity=-1)
+            else:
+                self.zone_timelines[name] = Timeline(capacity=zone.max_drones or 1)
+
+        for conn in self.data.connections:
+            self.adj[conn.left].append(conn.right)
+            self.adj[conn.right].append(conn.left)
+            
+            edge_key = tuple(sorted((conn.left, conn.right)))
+            self.edge_timelines[edge_key] = Timeline(capacity=conn.max_link_capacity)
+
+    def is_move_valid(self, current: str, nxt: str, current_turn: int) -> bool:
+        target_zone = self.data.zones[nxt]
+        if target_zone.zone_type == "blocked":
+            return False
+
+        travel_cost = 2 if target_zone.zone_type == "restricted" else 1
+        arrival_turn = current_turn + travel_cost
+
+        edge_key = tuple(sorted((current, nxt)))
+        if not self.edge_timelines[edge_key].can_enter(current_turn):
+            return False
+
+        if not self.zone_timelines[nxt].can_enter(arrival_turn):
+            return False
+
+        return True
+
+    def reserve_move(self, current: str, nxt: str, current_turn: int) -> None:
+        target_zone = self.data.zones[nxt]
+        travel_cost = 2 if target_zone.zone_type == "restricted" else 1
+        arrival_turn = current_turn + travel_cost
+
+        edge_key = tuple(sorted((current, nxt)))
+        self.edge_timelines[edge_key].reserve(current_turn)
+        self.zone_timelines[nxt].reserve(arrival_turn)
+
+
+@dataclass(slots=True)
+class StateNode:
+    zone_name: str
+    turn: int
+    path: list[tuple[str, int]]
 
 
 class Simulator:
-    """Turn-based drone scheduler."""
+    """Turn-based drone scheduler using Space-Time BFS."""
 
     def run(self, data: MapData) -> Iterator[list[Move]]:
-        """Yield simulation turns until all drones are delivered."""
-        graph = self._build_graph(data)
-        candidates = self._build_candidate_paths(data, graph)
+        st_graph = SpaceTimeGraph(data)
+        drone_schedules: dict[int, list[tuple[str, int]]] = {}
 
-        if not candidates:
-            raise ValueError("No valid path from start to end")
+        # 1. Route each drone individually from Start to Finish
+        for drone_id in range(1, data.nb_drones + 1):
+            schedule = self._find_path_for_drone(st_graph, data)
+            if not schedule:
+                raise ValueError(f"No valid path found for drone {drone_id}")
+            drone_schedules[drone_id] = schedule
 
-        drones = self._assign_drones(data, candidates)
-        delivered = 0
+        # 2. Transpose schedules into turn-by-turn output for the Iterator
+        yield from self._transpose_to_turns(drone_schedules, data)
 
-        while delivered < data.nb_drones:
-            turn_moves: list[Move] = []
-            zone_occupied: dict[str, int] = {}
-            edge_occupied: dict[tuple[str, str], int] = {}
+    def _find_path_for_drone(self, graph: SpaceTimeGraph, data: MapData) -> list[tuple[str, int]]:
+        start = data.start_zone
+        if start is None:
+            return []
+            
+        goal = data.end_zone
+        
+        # Queue stores: StateNode(zone, turn, history)
+        queue: deque[StateNode] = deque([StateNode(start, 0, [(start, 0)])])
+        visited: set[tuple[str, int]] = {(start, 0)}
 
-            for drone in drones:
-                if drone.delivered or drone.transit_remaining <= 0:
-                    continue
+        while queue:
+            current = queue.popleft()
 
-                drone.transit_remaining -= 1
-                if drone.transit_remaining > 0:
-                    continue
+            if current.zone_name == goal:
+                # We found the fastest valid path! Reserve it globally.
+                self._lock_reservations(graph, current.path)
+                return current.path
 
-                next_zone = drone.path[drone.path_index + 1]
-                if not self._can_enter_zone(data, next_zone, zone_occupied):
-                    drone.transit_remaining = 1
-                    continue
+            # Option A: Move to an adjacent zone
+            for neighbor in graph.adj[current.zone_name]:
+                if graph.is_move_valid(current.zone_name, neighbor, current.turn):
+                    target_zone = data.zones[neighbor]
+                    travel_cost = 2 if target_zone.zone_type == "restricted" else 1
+                    arrival_turn = current.turn + travel_cost
+                    
+                    next_state = (neighbor, arrival_turn)
+                    if next_state not in visited:
+                        visited.add(next_state)
+                        new_path = current.path + [next_state]
+                        queue.append(StateNode(neighbor, arrival_turn, new_path))
 
-                connection_name = self._connection_name(data, drone.current_zone, next_zone)
-                self._advance_drone(drone, next_zone)
-                zone_occupied[next_zone] = zone_occupied.get(next_zone, 0) + 1
+            # Option B: Wait in place (if it's not a restricted zone)
+            if data.zones[current.zone_name].zone_type != "restricted":
+                if graph.zone_timelines[current.zone_name].can_enter(current.turn + 1):
+                    wait_state = (current.zone_name, current.turn + 1)
+                    if wait_state not in visited:
+                        visited.add(wait_state)
+                        new_path = current.path + [wait_state]
+                        queue.append(StateNode(current.zone_name, current.turn + 1, new_path))
 
-                turn_moves.append(
-                    Move(
-                        drone_id=drone.drone_id,
+        return []
+
+    def _lock_reservations(self, graph: SpaceTimeGraph, path: list[tuple[str, int]]) -> None:
+        """Iterate through the found path and reserve the timelines."""
+        for i in range(len(path) - 1):
+            curr_zone, curr_turn = path[i]
+            next_zone, _ = path[i + 1]
+            
+            # If the drone waited, reserve the zone. Otherwise, reserve the move edge.
+            if curr_zone == next_zone:
+                graph.zone_timelines[curr_zone].reserve(curr_turn + 1)
+            else:
+                graph.reserve_move(curr_zone, next_zone, curr_turn)
+
+    def _transpose_to_turns(self, schedules: dict[int, list[tuple[str, int]]], data: MapData) -> Iterator[list[Move]]:
+        """Converts internal path schedules back into turn-by-turn simulation yields."""
+        drone_actions: dict[int, dict[int, Move]] = {d: {} for d in schedules}
+        
+        # Build a dictionary of actions indexed by drone_id and turn number
+        for drone_id, path in schedules.items():
+            for i in range(len(path) - 1):
+                curr_zone, curr_turn = path[i]
+                next_zone, next_turn = path[i + 1]
+
+                # Drone is just waiting in place; no Move yielded
+                if curr_zone == next_zone:
+                    continue 
+
+                dest_type = data.zones[next_zone].zone_type
+
+                if dest_type == "restricted":
+                    conn_name = self._connection_name(data, curr_zone, next_zone)
+                    # Turn 1: Enter the connection (is_transit = True)
+                    drone_actions[drone_id][curr_turn] = Move(
+                        drone_id=drone_id,
                         destination=next_zone,
-                        destination_type=data.zones[next_zone].zone_type,
-                        is_transit=False,
-                        connection_name=connection_name,
+                        destination_type=dest_type,
+                        is_transit=True,
+                        connection_name=conn_name
                     )
-                )
-
-                if next_zone == data.end_zone:
-                    drone.delivered = True
-                    delivered += 1
-
-            for drone in drones:
-                if drone.delivered or drone.transit_remaining > 0:
-                    continue
-
-                if drone.path_index >= len(drone.path) - 1:
-                    continue
-
-                current_zone = drone.current_zone
-                next_zone = drone.path[drone.path_index + 1]
-                edge_key = tuple(sorted((current_zone, next_zone)))
-
-                if not self._can_use_edge(data, current_zone, next_zone, edge_occupied):
-                    continue
-                if not self._can_enter_zone(data, next_zone, zone_occupied):
-                    continue
-
-                next_zone_obj = data.zones[next_zone]
-                edge_occupied[edge_key] = edge_occupied.get(edge_key, 0) + 1
-
-                if next_zone_obj.zone_type == "restricted":
-                    drone.transit_remaining = 1
-                    connection_name = self._connection_name(data, current_zone, next_zone)
-                    turn_moves.append(
-                        Move(
-                            drone_id=drone.drone_id,
-                            destination=next_zone,
-                            destination_type=next_zone_obj.zone_type,
-                            is_transit=True,
-                            connection_name=connection_name,
-                        )
+                    # Turn 2: Arrive at destination (is_transit = False)
+                    drone_actions[drone_id][curr_turn + 1] = Move(
+                        drone_id=drone_id,
+                        destination=next_zone,
+                        destination_type=dest_type,
+                        is_transit=False,
+                        connection_name=conn_name
                     )
                 else:
-                    self._advance_drone(drone, next_zone)
-                    zone_occupied[next_zone] = zone_occupied.get(next_zone, 0) + 1
-                    turn_moves.append(
-                        Move(
-                            drone_id=drone.drone_id,
-                            destination=next_zone,
-                            destination_type=next_zone_obj.zone_type,
-                            is_transit=False,
-                            connection_name=None,
-                        )
+                    # Turn 1: Arrive directly
+                    drone_actions[drone_id][curr_turn] = Move(
+                        drone_id=drone_id,
+                        destination=next_zone,
+                        destination_type=dest_type,
+                        is_transit=False,
+                        connection_name=None
                     )
 
-                    if next_zone == data.end_zone:
-                        drone.delivered = True
-                        delivered += 1
-
+        max_turn = max((max(actions.keys(), default=-1) for actions in drone_actions.values()), default=-1)
+        
+        # Yield the moves turn by turn exactly as the CLI/Printer expects
+        for t in range(max_turn + 1):
+            turn_moves = []
+            for drone_id in sorted(drone_actions.keys()):
+                if t in drone_actions[drone_id]:
+                    turn_moves.append(drone_actions[drone_id][t])
+            
             if turn_moves:
                 yield turn_moves
 
-    def _assign_drones(self, data: MapData, candidates: list[PathCandidate]) -> list[DroneState]:
-        """Assign drones round-robin across candidate paths."""
-        drones: list[DroneState] = []
-        paths = [candidate.path for candidate in candidates]
-
-        for index in range(data.nb_drones):
-            drones.append(
-                DroneState(
-                    drone_id=index + 1,
-                    current_zone=data.start_zone,
-                    path=paths[index % len(paths)],
-                )
-            )
-        return drones
-
-    def _build_graph(self, data: MapData) -> dict[str, list[str]]:
-        """Build adjacency list."""
-        graph: dict[str, list[str]] = {name: [] for name in data.zones}
-        for connection in data.connections:
-            graph[connection.left].append(connection.right)
-            graph[connection.right].append(connection.left)
-        return graph
-
-    def _build_candidate_paths(
-        self,
-        data: MapData,
-        graph: dict[str, list[str]],
-    ) -> list[PathCandidate]:
-        """Build candidate paths."""
-        base = self._dijkstra(data, graph)
-        if not base:
-            return []
-
-        candidates = [PathCandidate(path=base, score=self._path_score(data, base))]
-        avoided_edges: set[tuple[str, str]] = {
-            tuple(sorted((base[i], base[i + 1])))
-            for i in range(len(base) - 1)
-        }
-
-        for _ in range(3):
-            alt = self._dijkstra(data, graph, avoided_edges=avoided_edges)
-            if not alt:
-                break
-            if alt not in [c.path for c in candidates]:
-                candidates.append(PathCandidate(path=alt, score=self._path_score(data, alt)))
-                for i in range(len(alt) - 1):
-                    avoided_edges.add(tuple(sorted((alt[i], alt[i + 1]))))
-
-        candidates.sort(key=lambda c: (c.score, len(c.path)))
-        return candidates
-
-    def _dijkstra(
-        self,
-        data: MapData,
-        graph: dict[str, list[str]],
-        avoided_edges: set[tuple[str, str]] | None = None,
-    ) -> list[str]:
-        """Find a weighted shortest path."""
-        avoided_edges = avoided_edges or set()
-        start = data.start_zone
-        goal = data.end_zone
-
-        dist: dict[str, int] = {start: 0}
-        prev: dict[str, str | None] = {start: None}
-        heap: list[tuple[int, str]] = [(0, start)]
-
-        while heap:
-            current_cost, current = heapq.heappop(heap)
-            if current_cost != dist.get(current):
-                continue
-            if current == goal:
-                break
-
-            for neighbor in graph[current]:
-                if data.zones[neighbor].zone_type == "blocked":
-                    continue
-
-                edge_key = tuple(sorted((current, neighbor)))
-                if edge_key in avoided_edges and current != start:
-                    continue
-
-                new_cost = current_cost + self._zone_cost(data.zones[neighbor])
-                if neighbor not in dist or new_cost < dist[neighbor]:
-                    dist[neighbor] = new_cost
-                    prev[neighbor] = current
-                    heapq.heappush(heap, (new_cost, neighbor))
-
-        if goal not in prev:
-            return []
-
-        path: list[str] = []
-        node: str | None = goal
-        while node is not None:
-            path.append(node)
-            node = prev[node]
-        path.reverse()
-        return path
-
-    def _path_score(self, data: MapData, path: list[str]) -> int:
-        """Score a path."""
-        score = 0
-        for node in path:
-            zone = data.zones[node]
-            score += self._zone_cost(zone)
-            if zone.zone_type == "priority":
-                score -= 1
-        return score
-
-    def _zone_cost(self, zone: Zone) -> int:
-        """Return movement cost for a zone."""
-        if zone.zone_type == "restricted":
-            return 2
-        return 1
-
-    def _can_use_edge(
-        self,
-        data: MapData,
-        left: str,
-        right: str,
-        edge_occupied: dict[tuple[str, str], int],
-    ) -> bool:
-        """Check connection capacity."""
-        cap = self._edge_capacity(data, left, right)
-        key = tuple(sorted((left, right)))
-        return edge_occupied.get(key, 0) < cap
-
-    def _edge_capacity(self, data: MapData, left: str, right: str) -> int:
-        """Return the edge capacity."""
-        for connection in data.connections:
-            if {connection.left, connection.right} == {left, right}:
-                return connection.max_link_capacity
-        return 1
-
-    def _can_enter_zone(
-        self,
-        data: MapData,
-        zone_name: str,
-        zone_occupied: dict[str, int],
-    ) -> bool:
-        """Check zone capacity."""
-        if zone_name == data.start_zone or zone_name == data.end_zone:
-            return True
-
-        zone = data.zones[zone_name]
-        return zone_occupied.get(zone_name, 0) < zone.max_drones
-
-    def _advance_drone(self, drone: DroneState, zone_name: str) -> None:
-        """Advance drone state."""
-        drone.current_zone = zone_name
-        drone.path_index += 1
-
     def _connection_name(self, data: MapData, left: str, right: str) -> str | None:
-        """Return the connection name between two zones."""
+        """Helper to find the connection name between two zones."""
         for connection in data.connections:
             if {connection.left, connection.right} == {left, right}:
                 return f"{connection.left}-{connection.right}"

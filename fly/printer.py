@@ -37,7 +37,7 @@ class Printer:
             else:
                 line.append(move.destination, style=self._destination_style(move.destination_type))
 
-        self._console.print(line)
+        self._console.print(line, soft_wrap=True, crop=False)
 
     def print_error(self, message: str) -> None:
         """Print an error panel."""

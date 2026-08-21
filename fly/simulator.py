@@ -95,11 +95,26 @@ class Simulator:
 
     def run(self, data: MapData) -> Iterator[list[Move]]:
         st_graph = SpaceTimeGraph(data)
+
+        # --- Compute topological distances to the goal ---
+        distances = {data.end_zone: 0}
+        bfs_queue = deque([data.end_zone])
+        while bfs_queue:
+            curr = bfs_queue.popleft()
+            for neighbor in st_graph.adj[curr]:
+                if neighbor not in distances:
+                    distances[neighbor] = distances[curr] + 1
+                    bfs_queue.append(neighbor)
+        # -------------------------------------------------------
+
         drone_schedules: dict[int, list[tuple[str, int]]] = {}
 
         # 1. Route each drone individually from Start to Finish
         for drone_id in range(1, data.nb_drones + 1):
-            schedule = self._find_path_for_drone(st_graph, data)
+            
+            # --- THE FIX IS HERE: We added `distances` as the third argument ---
+            schedule = self._find_path_for_drone(st_graph, data, distances)
+            
             if not schedule:
                 raise ValueError(f"No valid path found for drone {drone_id}")
             drone_schedules[drone_id] = schedule
@@ -107,7 +122,9 @@ class Simulator:
         # 2. Transpose schedules into turn-by-turn output for the Iterator
         yield from self._transpose_to_turns(drone_schedules, data)
 
-    def _find_path_for_drone(self, graph: SpaceTimeGraph, data: MapData) -> list[tuple[str, int]]:
+    def _find_path_for_drone(
+        self, graph: SpaceTimeGraph, data: MapData, distances: dict[str, int]
+    ) -> list[tuple[str, int]]:
         start = data.start_zone
         if start is None:
             return []
@@ -126,8 +143,17 @@ class Simulator:
                 self._lock_reservations(graph, current.path)
                 return current.path
 
-            # Option A: Move to an adjacent zone
+            # Group neighbors by flow direction toward the goal
+            forward = []
+            backward = []
             for neighbor in graph.adj[current.zone_name]:
+                if distances[neighbor] < distances[current.zone_name]:
+                    forward.append(neighbor)
+                else:
+                    backward.append(neighbor)
+
+            # Option 1: Move FORWARD (Highest Priority)
+            for neighbor in forward:
                 if graph.is_move_valid(current.zone_name, neighbor, current.turn):
                     target_zone = data.zones[neighbor]
                     travel_cost = 2 if target_zone.zone_type == "restricted" else 1
@@ -139,7 +165,7 @@ class Simulator:
                         new_path = current.path + [next_state]
                         queue.append(StateNode(neighbor, arrival_turn, new_path))
 
-            # Option B: Wait in place (if it's not a restricted zone)
+            # Option 2: WAIT in place (If forward is blocked)
             if data.zones[current.zone_name].zone_type != "restricted":
                 if graph.zone_timelines[current.zone_name].can_enter(current.turn + 1):
                     wait_state = (current.zone_name, current.turn + 1)
@@ -147,6 +173,19 @@ class Simulator:
                         visited.add(wait_state)
                         new_path = current.path + [wait_state]
                         queue.append(StateNode(current.zone_name, current.turn + 1, new_path))
+
+            # Option 3: Move BACKWARD / LATERAL (Last resort to escape traffic)
+            for neighbor in backward:
+                if graph.is_move_valid(current.zone_name, neighbor, current.turn):
+                    target_zone = data.zones[neighbor]
+                    travel_cost = 2 if target_zone.zone_type == "restricted" else 1
+                    arrival_turn = current.turn + travel_cost
+                    
+                    next_state = (neighbor, arrival_turn)
+                    if next_state not in visited:
+                        visited.add(next_state)
+                        new_path = current.path + [next_state]
+                        queue.append(StateNode(neighbor, arrival_turn, new_path))
 
         return []
 

@@ -9,3 +9,5 @@ end_hub: goal 3 0 [color=red]
 connection: start-bottleneck [max_link_capacity=4]
 connection: bottleneck-wide_area [max_link_capacity=4]
 connection: wide_area-goal [max_link_capacity=4]
+
+

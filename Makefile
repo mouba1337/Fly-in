@@ -1,4 +1,4 @@
-MAP ?= maps/challenger/01_the_impossible_dream.txt
+MAP ?= maps/easy/02_simple_fork.txt
 
 install:
 	uv sync

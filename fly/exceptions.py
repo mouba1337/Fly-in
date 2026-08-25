@@ -8,7 +8,3 @@ class MapParseError(FlyInError):
 
 class SimulationError(FlyInError):
     """Raised when the simulation fails."""
-
-
-class CliError(FlyInError):
-    """Raised when CLI input is invalid."""

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Literal
 
 ZoneType = Literal["normal", "blocked", "restricted", "priority"]
@@ -18,7 +18,6 @@ class Zone:
     max_drones: int = 1
     is_start: bool = False
     is_end: bool = False
-    links: list[str] = field(default_factory=list)
 
 
 @dataclass(slots=True)

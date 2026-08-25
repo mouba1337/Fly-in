@@ -1,4 +1,4 @@
-MAP ?= maps/easy/02_simple_fork.txt
+MAP ?= maps/challenger/01_the_impossible_dream.txt
 
 install:
 	uv sync
@@ -13,9 +13,9 @@ clean:
 	rm -rf __pycache__ .mypy_cache .pytest_cache .ruff_cache .venv dist build *.egg-info
 
 lint:
-	flake8 .
-	mypy . --warn-return-any --warn-unused-ignores --ignore-missing-imports --disallow-untyped-defs --check-untyped-defs
+	uv run flake8 .
+	uv run mypy . --warn-return-any --warn-unused-ignores --ignore-missing-imports --disallow-untyped-defs --check-untyped-defs
 
 lint-strict:
-	flake8 .
-	mypy . --strict
+	uv run flake8 .
+	uv run mypy . --strict

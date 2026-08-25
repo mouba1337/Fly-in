@@ -16,6 +16,7 @@ class FlyInApp:
     def run(self) -> int:
         try:
             data = self._parser.parse(self._map_path)
+            self._printer.load_zones(data.zones)
             self._printer.print_banner()
             self._printer.print_map(self._map_path)
 

@@ -22,7 +22,6 @@ class FlyInApp:
 
             for turn in self._simulator.run(data):
                 self._printer.print_turn(turn)
-
             return 0
         except FlyInError as exc:
             self._printer.print_error(str(exc))

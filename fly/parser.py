@@ -10,10 +10,17 @@ class MapParser:
     """Parse Fly-In map files into typed in-memory structures."""
 
     _VALID_ZONE_TYPES: set[str] = {
-        "normal", "blocked", "restricted", "priority",
+        "normal",
+        "blocked",
+        "restricted",
+        "priority",
     }
     _VALID_DIRECTIVES: set[str] = {
-        "nb_drones", "start_hub", "hub", "end_hub", "connection",
+        "nb_drones",
+        "start_hub",
+        "hub",
+        "end_hub",
+        "connection",
     }
     _VALID_ZONE_KEYS: set[str] = {"zone", "color", "max_drones"}
     _VALID_CONNECTION_KEYS: set[str] = {"max_link_capacity"}
@@ -25,9 +32,7 @@ class MapParser:
         try:
             lines = file_path.read_text(encoding="utf-8").splitlines()
         except OSError as exc:
-            raise MapParseError(
-                f"Cannot read file '{file_path}': {exc}"
-            ) from exc
+            raise MapParseError(f"Cannot read file '{file_path}': {exc}") from exc
 
         nb_drones: int | None = None
         zones: dict[str, Zone] = {}
@@ -123,18 +128,14 @@ class MapParser:
             raise MapParseError(f"Line {line_no}: missing ':' separator")
         directive = line.split(":", 1)[0].strip()
         if directive not in self._VALID_DIRECTIVES:
-            raise MapParseError(
-                f"Line {line_no}: unknown directive '{directive}'"
-            )
+            raise MapParseError(f"Line {line_no}: unknown directive '{directive}'")
         return directive
 
     def _parse_nb_drones(self, line: str, line_no: int) -> int:
         """Parse nb_drones."""
         value = line.split(":", 1)[1].strip()
         if not value.isdigit() or int(value) <= 0:
-            raise MapParseError(
-                f"Line {line_no}: nb_drones must be a positive integer"
-            )
+            raise MapParseError(f"Line {line_no}: nb_drones must be a positive integer")
         return int(value)
 
     def _parse_zone(
@@ -161,17 +162,13 @@ class MapParser:
         x = self._parse_int(parts[2], line_no, "x")
         y = self._parse_int(parts[3], line_no, "y")
 
-        metadata = self._parse_metadata(
-            meta, line_no, self._VALID_ZONE_KEYS
-        )
+        metadata = self._parse_metadata(meta, line_no, self._VALID_ZONE_KEYS)
 
         zone_type: ZoneType = "normal"
         if "zone" in metadata:
             zone_value = metadata["zone"]
             if zone_value not in self._VALID_ZONE_TYPES:
-                raise MapParseError(
-                    f"Line {line_no}: invalid zone type '{zone_value}'"
-                )
+                raise MapParseError(f"Line {line_no}: invalid zone type '{zone_value}'")
             zone_type = zone_value  # type: ignore[assignment]
 
         max_drones = 1
@@ -213,17 +210,11 @@ class MapParser:
 
         left, right = raw.split("-", 1)
         if not left or not right:
-            raise MapParseError(
-                f"Line {line_no}: invalid connection endpoints"
-            )
+            raise MapParseError(f"Line {line_no}: invalid connection endpoints")
         if left == right:
-            raise MapParseError(
-                f"Line {line_no}: a zone cannot connect to itself"
-            )
+            raise MapParseError(f"Line {line_no}: a zone cannot connect to itself")
 
-        metadata = self._parse_metadata(
-            meta, line_no, self._VALID_CONNECTION_KEYS
-        )
+        metadata = self._parse_metadata(meta, line_no, self._VALID_CONNECTION_KEYS)
 
         max_link_capacity = 1
         if "max_link_capacity" in metadata:
@@ -231,9 +222,7 @@ class MapParser:
                 metadata["max_link_capacity"], line_no, "max_link_capacity"
             )
 
-        return Connection(
-            left=left, right=right, max_link_capacity=max_link_capacity
-        )
+        return Connection(left=left, right=right, max_link_capacity=max_link_capacity)
 
     def _split_metadata(self, line: str, line_no: int) -> tuple[str, str]:
         """Split a line into its main part and its metadata block."""
@@ -249,9 +238,7 @@ class MapParser:
         head, _, rest = line.partition("[")
         body = rest[:-1]
         if "[" in body or "]" in body:
-            raise MapParseError(
-                f"Line {line_no}: malformed metadata block"
-            )
+            raise MapParseError(f"Line {line_no}: malformed metadata block")
         return head.strip(), body.strip()
 
     def _parse_metadata(
@@ -265,23 +252,17 @@ class MapParser:
 
         for item in meta.split():
             if "=" not in item:
-                raise MapParseError(
-                    f"Line {line_no}: invalid metadata token '{item}'"
-                )
+                raise MapParseError(f"Line {line_no}: invalid metadata token '{item}'")
             key, value = item.split("=", 1)
             if not key or not value:
-                raise MapParseError(
-                    f"Line {line_no}: invalid metadata token '{item}'"
-                )
+                raise MapParseError(f"Line {line_no}: invalid metadata token '{item}'")
             if key not in allowed:
                 raise MapParseError(
                     f"Line {line_no}: unknown metadata key '{key}' "
                     f"(expected one of: {', '.join(sorted(allowed))})"
                 )
             if key in result:
-                raise MapParseError(
-                    f"Line {line_no}: duplicated metadata key '{key}'"
-                )
+                raise MapParseError(f"Line {line_no}: duplicated metadata key '{key}'")
             result[key] = value
 
         return result
@@ -291,19 +272,13 @@ class MapParser:
         try:
             return int(value)
         except ValueError as exc:
-            raise MapParseError(
-                f"Line {line_no}: invalid {field} '{value}'"
-            ) from exc
+            raise MapParseError(f"Line {line_no}: invalid {field} '{value}'") from exc
 
-    def _parse_positive_int(
-        self, value: str, line_no: int, field: str
-    ) -> int:
+    def _parse_positive_int(self, value: str, line_no: int, field: str) -> int:
         """Parse a positive integer value."""
         number = self._parse_int(value, line_no, field)
         if number <= 0:
-            raise MapParseError(
-                f"Line {line_no}: {field} must be a positive integer"
-            )
+            raise MapParseError(f"Line {line_no}: {field} must be a positive integer")
         return number
 
     def _validate_zone_name(self, name: str, line_no: int) -> None:
@@ -315,14 +290,10 @@ class MapParser:
                 f"Line {line_no}: zone names cannot contain spaces or '-'"
             )
 
-    def _add_zone(
-        self, zone: Zone, zones: dict[str, Zone], line_no: int
-    ) -> None:
+    def _add_zone(self, zone: Zone, zones: dict[str, Zone], line_no: int) -> None:
         """Add a zone after checking that its name is unique."""
         if zone.name in zones:
-            raise MapParseError(
-                f"Line {line_no}: duplicate zone '{zone.name}'"
-            )
+            raise MapParseError(f"Line {line_no}: duplicate zone '{zone.name}'")
         zones[zone.name] = zone
 
     def _ensure_known_zones(
@@ -330,10 +301,6 @@ class MapParser:
     ) -> None:
         """Ensure both endpoints exist before adding a connection."""
         if connection.left not in zones:
-            raise MapParseError(
-                f"Line {line_no}: unknown zone '{connection.left}'"
-            )
+            raise MapParseError(f"Line {line_no}: unknown zone '{connection.left}'")
         if connection.right not in zones:
-            raise MapParseError(
-                f"Line {line_no}: unknown zone '{connection.right}'"
-            )
+            raise MapParseError(f"Line {line_no}: unknown zone '{connection.right}'")

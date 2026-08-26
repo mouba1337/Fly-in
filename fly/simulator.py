@@ -60,9 +60,7 @@ class SpaceTimeGraph:
             self.adj[conn.left].append(conn.right)
             self.adj[conn.right].append(conn.left)
             key = self.edge_key(conn.left, conn.right)
-            self.edge_timelines[key] = Timeline(
-                capacity=conn.max_link_capacity
-            )
+            self.edge_timelines[key] = Timeline(capacity=conn.max_link_capacity)
 
     @staticmethod
     def edge_key(left: str, right: str) -> tuple[str, str]:
@@ -138,8 +136,7 @@ class Simulator:
 
         if data.start_zone not in self._zones_reaching_goal(graph, data):
             raise SimulationError(
-                f"No route exists from '{data.start_zone}' "
-                f"to '{data.end_zone}'"
+                f"No route exists from '{data.start_zone}' " f"to '{data.end_zone}'"
             )
 
         neighbors = self._rank_neighbors(graph, data)
@@ -148,16 +145,12 @@ class Simulator:
         for drone_id in range(1, data.nb_drones + 1):
             path = self._find_path_for_drone(graph, data, neighbors)
             if not path:
-                raise SimulationError(
-                    f"No valid path found for drone {drone_id}"
-                )
+                raise SimulationError(f"No valid path found for drone {drone_id}")
             schedules[drone_id] = path
 
         yield from self._transpose_to_turns(schedules, data)
 
-    def _zones_reaching_goal(
-        self, graph: SpaceTimeGraph, data: MapData
-    ) -> set[str]:
+    def _zones_reaching_goal(self, graph: SpaceTimeGraph, data: MapData) -> set[str]:
         """Every zone with at least one route to the end hub.
 
         Used only to reject a map whose goal cannot be reached at all, with a
@@ -185,13 +178,11 @@ class Simulator:
         arrive on the same turn. The order depends only on the map, so it is
         computed once here rather than on every expanded state.
         """
+
         def is_priority(name: str) -> int:
             return 0 if data.zones[name].zone_type == "priority" else 1
 
-        return {
-            zone: sorted(graph.adj[zone], key=is_priority)
-            for zone in data.zones
-        }
+        return {zone: sorted(graph.adj[zone], key=is_priority) for zone in data.zones}
 
     def _find_path_for_drone(
         self,
@@ -238,9 +229,9 @@ class Simulator:
                 landed = Position(current.position.zone)
                 if (landed, turn) not in visited:
                     visited.add((landed, turn))
-                    queue.append(StateNode(
-                        landed, turn, current.path + [(landed.zone, turn)]
-                    ))
+                    queue.append(
+                        StateNode(landed, turn, current.path + [(landed.zone, turn)])
+                    )
                 continue
 
             zone = current.position.zone
@@ -270,9 +261,9 @@ class Simulator:
             if (current.position, turn) not in visited:
                 if graph.zone_timelines[zone].can_enter(turn):
                     visited.add((current.position, turn))
-                    queue.append(StateNode(
-                        current.position, turn, current.path + [(zone, turn)]
-                    ))
+                    queue.append(
+                        StateNode(current.position, turn, current.path + [(zone, turn)])
+                    )
 
         return []
 
@@ -347,9 +338,7 @@ class Simulator:
                 if turn in actions[drone_id]
             ]
 
-    def _connection_name(
-        self, data: MapData, left: str, right: str
-    ) -> str | None:
+    def _connection_name(self, data: MapData, left: str, right: str) -> str | None:
         """Return the declared name of the connection between two zones."""
         for connection in data.connections:
             if {connection.left, connection.right} == {left, right}:

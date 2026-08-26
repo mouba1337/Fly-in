@@ -29,5 +29,7 @@ def parse_args(argv: list[str] | None = None) -> Args:
         required=True,
         help="Path to the map file",
     )
+
     namespace = parser.parse_args(argv)
+
     return Args(map=namespace.map)

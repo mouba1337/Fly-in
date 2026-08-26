@@ -38,7 +38,12 @@ class Printer:
     }
 
     _DRONE_PALETTE: list[str] = [
-        "cyan", "magenta", "blue", "green", "yellow", "red",
+        "cyan",
+        "magenta",
+        "blue",
+        "green",
+        "yellow",
+        "red",
     ]
 
     def __init__(self) -> None:
@@ -79,25 +84,19 @@ class Printer:
             if index > 0:
                 line.append(" ")
 
-            line.append(
-                f"D{move.drone_id}", style=self._drone_style(move.drone_id)
-            )
+            line.append(f"D{move.drone_id}", style=self._drone_style(move.drone_id))
             line.append("-", style="white")
 
             if move.is_transit and move.connection_name:
                 line.append(move.connection_name, style="yellow")
             else:
-                line.append(
-                    move.destination, style=self._zone_style(move)
-                )
+                line.append(move.destination, style=self._zone_style(move))
 
         self._console.print(line, soft_wrap=True, crop=False)
 
     def print_error(self, message: str) -> None:
         """Print an error panel."""
-        self._console.print(
-            Panel(message, title="ERROR", border_style="red")
-        )
+        self._console.print(Panel(message, title="ERROR", border_style="red"))
 
     def _drone_style(self, drone_id: int) -> str:
         """Return a stable color for each drone."""

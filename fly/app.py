@@ -1,3 +1,5 @@
+"""Application wiring: parse a map, run it, render the result."""
+
 from __future__ import annotations
 
 from fly.exceptions import FlyInError
@@ -7,13 +9,25 @@ from fly.simulator import Simulator
 
 
 class FlyInApp:
+    """Run one simulation end to end: parse, schedule, then render."""
+
     def __init__(self, map_path: str) -> None:
+        """Store the map path and build the parser, printer and simulator.
+
+        Args:
+            map_path: Path to the map file to simulate.
+        """
         self._map_path = map_path
         self._parser = MapParser()
         self._printer = Printer()
         self._simulator = Simulator()
 
     def run(self) -> int:
+        """Run the simulation and report the process exit code.
+
+        Returns:
+            0 when every drone reached the end hub, 1 on any error.
+        """
         try:
             data = self._parser.parse(self._map_path)
             self._printer.load_zones(data.zones)

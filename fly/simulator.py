@@ -1,3 +1,5 @@
+"""Turn-by-turn drone scheduling over a space-time graph."""
+
 from __future__ import annotations
 
 from collections import deque
@@ -40,6 +42,11 @@ class SpaceTimeGraph:
     """The zone network plus the reservation table used to avoid conflicts."""
 
     def __init__(self, data: MapData) -> None:
+        """Build the adjacency lists and the reservation table.
+
+        Args:
+            data: The parsed map to build the graph from.
+        """
         self.data = data
         self.zone_timelines: dict[str, Timeline] = {}
         self.edge_timelines: dict[tuple[str, str], Timeline] = {}
@@ -60,7 +67,9 @@ class SpaceTimeGraph:
             self.adj[conn.left].append(conn.right)
             self.adj[conn.right].append(conn.left)
             key = self.edge_key(conn.left, conn.right)
-            self.edge_timelines[key] = Timeline(capacity=conn.max_link_capacity)
+            self.edge_timelines[key] = Timeline(
+                capacity=conn.max_link_capacity
+            )
 
     @staticmethod
     def edge_key(left: str, right: str) -> tuple[str, str]:
@@ -136,7 +145,8 @@ class Simulator:
 
         if data.start_zone not in self._zones_reaching_goal(graph, data):
             raise SimulationError(
-                f"No route exists from '{data.start_zone}' " f"to '{data.end_zone}'"
+                f"No route exists from '{data.start_zone}' "
+                f"to '{data.end_zone}'"
             )
 
         neighbors = self._rank_neighbors(graph, data)
@@ -145,12 +155,16 @@ class Simulator:
         for drone_id in range(1, data.nb_drones + 1):
             path = self._find_path_for_drone(graph, data, neighbors)
             if not path:
-                raise SimulationError(f"No valid path found for drone {drone_id}")
+                raise SimulationError(
+                    f"No valid path found for drone {drone_id}"
+                )
             schedules[drone_id] = path
 
         yield from self._transpose_to_turns(schedules, data)
 
-    def _zones_reaching_goal(self, graph: SpaceTimeGraph, data: MapData) -> set[str]:
+    def _zones_reaching_goal(
+        self, graph: SpaceTimeGraph, data: MapData
+    ) -> set[str]:
         """Every zone with at least one route to the end hub.
 
         Used only to reject a map whose goal cannot be reached at all, with a
@@ -180,9 +194,13 @@ class Simulator:
         """
 
         def is_priority(name: str) -> int:
+            """Sort key placing priority zones before every other zone."""
             return 0 if data.zones[name].zone_type == "priority" else 1
 
-        return {zone: sorted(graph.adj[zone], key=is_priority) for zone in data.zones}
+        return {
+            zone: sorted(graph.adj[zone], key=is_priority)
+            for zone in data.zones
+        }
 
     def _find_path_for_drone(
         self,
@@ -230,7 +248,11 @@ class Simulator:
                 if (landed, turn) not in visited:
                     visited.add((landed, turn))
                     queue.append(
-                        StateNode(landed, turn, current.path + [(landed.zone, turn)])
+                        StateNode(
+                            landed,
+                            turn,
+                            current.path + [(landed.zone, turn)],
+                        )
                     )
                 continue
 
@@ -262,7 +284,11 @@ class Simulator:
                 if graph.zone_timelines[zone].can_enter(turn):
                     visited.add((current.position, turn))
                     queue.append(
-                        StateNode(current.position, turn, current.path + [(zone, turn)])
+                        StateNode(
+                            current.position,
+                            turn,
+                            current.path + [(zone, turn)],
+                        )
                     )
 
         return []
@@ -338,7 +364,9 @@ class Simulator:
                 if turn in actions[drone_id]
             ]
 
-    def _connection_name(self, data: MapData, left: str, right: str) -> str | None:
+    def _connection_name(
+        self, data: MapData, left: str, right: str
+    ) -> str | None:
         """Return the declared name of the connection between two zones."""
         for connection in data.connections:
             if {connection.left, connection.right} == {left, right}:

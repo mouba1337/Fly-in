@@ -1,5 +1,4 @@
-MAP ?= maps/challenger/01_the_impossible_dream.txt
-
+MAP ?=
 
 install:
 	uv sync
@@ -11,7 +10,8 @@ debug:
 	uv run python -m pdb -- main.py --map $(MAP)
 
 clean:
-	rm -rf __pycache__ .mypy_cache .pytest_cache .ruff_cache
+	find . -type d -name __pycache__ -not -path "./.venv/*" -exec rm -rf {} +
+	rm -rf .mypy_cache .pytest_cache .ruff_cache
 
 lint:
 	uv run flake8 .

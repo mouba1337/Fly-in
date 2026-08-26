@@ -1,3 +1,5 @@
+"""Command-line interface for the Fly-In simulation."""
+
 from __future__ import annotations
 
 import argparse

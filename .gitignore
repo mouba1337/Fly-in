@@ -5,3 +5,4 @@ __pycache__/
 .venv/
 uv.lock
 *.pyc
+.DS_Store

@@ -1,3 +1,6 @@
+"""Exception hierarchy for the Fly-In simulation."""
+
+
 class FlyInError(Exception):
     """Base exception for Fly-In."""
 

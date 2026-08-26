@@ -1,3 +1,5 @@
+"""Terminal rendering of the Fly-In simulation."""
+
 from __future__ import annotations
 
 from rich.color import Color, ColorParseError
@@ -47,6 +49,7 @@ class Printer:
     ]
 
     def __init__(self) -> None:
+        """Create the console and an empty zone-style cache."""
         self._console = Console()
         self._zone_styles: dict[str, str] = {}
 
@@ -84,7 +87,10 @@ class Printer:
             if index > 0:
                 line.append(" ")
 
-            line.append(f"D{move.drone_id}", style=self._drone_style(move.drone_id))
+            line.append(
+                f"D{move.drone_id}",
+                style=self._drone_style(move.drone_id),
+            )
             line.append("-", style="white")
 
             if move.is_transit and move.connection_name:

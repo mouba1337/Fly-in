@@ -1,3 +1,5 @@
+"""Typed data structures shared across the Fly-In simulation."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass

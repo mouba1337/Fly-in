@@ -1,4 +1,4 @@
-*This project has been created as part of the 42 curriculum by hmbark.*
+*This project has been created as part of the 42 curriculum by mhend.*
 
 ---
 
@@ -38,27 +38,50 @@ uv sync
 
 You can run the simulation using the provided `Makefile` or directly via the command line.
 
-**Basic Run:**
+The map file is passed with the `--map` option.
+
+**Using the Makefile:**
 
 ```bash
-make run
-
+make run MAP=maps/easy/01_linear_path.txt
 ```
 
-*Or manually:*
+**Or directly:**
 
 ```bash
-uv run python main.py maps/challenger/01_the_impossible_dream.txt
-
+uv run python main.py --map maps/challenger/01_the_impossible_dream.txt
 ```
 
-**With Capacity Dashboard:**
-To view real-time statistics on zone and connection occupancy during the simulation, use the `--capacity-info` flag:
+### Example
 
-```bash
-uv run python main.py --capacity-info maps/challenger/01_the_impossible_dream.txt
+Input — `maps/easy/01_linear_path.txt`:
 
 ```
+# Easy Level 1: Simple linear path
+nb_drones: 2
+
+start_hub: start 0 0 [color=green]
+hub: waypoint1 1 0 [color=blue]
+hub: waypoint2 2 0 [color=blue]
+end_hub: goal 3 0 [color=red]
+
+connection: start-waypoint1
+connection: waypoint1-waypoint2
+connection: waypoint2-goal
+```
+
+Output — one line per simulation turn, drones that do not move are omitted:
+
+```
+D1-waypoint1
+D1-waypoint2 D2-waypoint1
+D1-goal D2-waypoint2
+D2-goal
+```
+
+Both drones are delivered in 4 turns. `waypoint1` and `waypoint2` have the
+default capacity of 1, so `D2` follows one turn behind `D1` rather than
+sharing a zone with it.
 
 ---
 
@@ -78,7 +101,6 @@ The terminal interface was built using the `rich` library to elevate the user ex
 
 * **Color-Coded Drones:** Each drone is assigned a stable color from a dynamically applied palette. As drones move across the map, their IDs and destinations are printed in their designated color, making it effortless for the user to track individual paths through chaotic junctions.
 * **Dynamic Text Wrapping:** Utilizing `soft_wrap=True` and `crop=False`, the UI ensures that complex turns with massive amounts of drone traffic seamlessly wrap to the next line without ever truncating data or breaking the layout.
-* **Capacity Dashboard UI:** When toggled, the `--capacity-info` feature renders a real-time, dimmed-text dashboard beneath the vibrant drone movements. This provides users with critical analytical data (e.g., `Connection bottleneck--wide_area: 2/4 capacity used`) to visualize exactly where traffic jams are occurring without overwhelming the main simulation output.
 
 ---
 

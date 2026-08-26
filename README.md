@@ -34,11 +34,23 @@ uv sync
 
 
 
+### Map files
+
+The map files are **not part of this repository** — they are distributed as an
+attachment to the subject (`maps.tar.gz`). Extract them wherever you like, for
+example at the project root:
+
+```bash
+tar -xzf maps.tar.gz
+```
+
+Any file following the format described in the subject works; the simulator
+reads whatever path you give it.
+
 ### Execution
 
-You can run the simulation using the provided `Makefile` or directly via the command line.
-
-The map file is passed with the `--map` option.
+The map file is passed with the `--map` option. `MAP` has no default value, so
+it must always be supplied.
 
 **Using the Makefile:**
 
@@ -52,9 +64,15 @@ make run MAP=maps/easy/01_linear_path.txt
 uv run python main.py --map maps/challenger/01_the_impossible_dream.txt
 ```
 
+**Debugging with pdb:**
+
+```bash
+make debug MAP=maps/easy/01_linear_path.txt
+```
+
 ### Example
 
-Input — `maps/easy/01_linear_path.txt`:
+Given a map file containing:
 
 ```
 # Easy Level 1: Simple linear path
